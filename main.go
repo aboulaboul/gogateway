@@ -9,6 +9,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 )
 
 // Route représente une route de redirection
@@ -23,20 +24,42 @@ type Config struct {
 }
 
 // proxyHandler redirige les requêtes vers l'URL cible
-func proxyHandler(target string) http.HandlerFunc {
+func proxyHandler(prefix string, target string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		url, err := url.Parse(target)
+		log.Printf("Received request for: %s", r.URL.Path)
+
+		targetURL, err := url.Parse(target)
 		if err != nil {
+			log.Printf("Invalid target URL: %s", target)
 			http.Error(w, "Invalid target URL", http.StatusInternalServerError)
 			return
 		}
 
-		proxy := httputil.NewSingleHostReverseProxy(url)
+		proxy := httputil.NewSingleHostReverseProxy(targetURL)
 		proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, err error) {
+			log.Printf("Error connecting to the backend server: %v", err)
 			http.Error(rw, "Error connecting to the backend server", http.StatusBadGateway)
 		}
 
-		r.URL.Path = r.URL.Path[len(r.URL.Path[:len(r.URL.Path)-len(r.URL.Path)]):] // Adjust the path to match the target service
+		// Ajuster le chemin de l'URL pour correspondre au service cible
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+		log.Printf("Rewriting URL to: %s", r.URL.Path)
+
+		// Gérer les WebSockets
+		if strings.HasPrefix(r.Header.Get("Connection"), "Upgrade") && r.Header.Get("Upgrade") == "websocket" {
+			proxy.Director = func(req *http.Request) {
+				req.URL.Scheme = targetURL.Scheme
+				req.URL.Host = targetURL.Host
+				req.URL.Path = targetURL.Path
+				if targetURL.RawQuery == "" || req.URL.RawQuery == "" {
+					req.URL.RawQuery = targetURL.RawQuery + req.URL.RawQuery
+				} else {
+					req.URL.RawQuery = targetURL.RawQuery + "&" + req.URL.RawQuery
+				}
+				req.Host = targetURL.Host
+			}
+		}
+
 		proxy.ServeHTTP(w, r)
 	}
 }
@@ -62,7 +85,7 @@ func main() {
 	// Définir les routes pour les différents services
 	for _, route := range config.Routes {
 		log.Printf("Configuring route: %s -> %s", route.Path, route.Target)
-		http.HandleFunc(route.Path, proxyHandler(route.Target))
+		http.HandleFunc(route.Path, proxyHandler(route.Path, route.Target))
 	}
 
 	// Charger les certificats SSL/TLS
