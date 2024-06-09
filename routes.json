@@ -1,0 +1,16 @@
+{
+    "routes": [
+        {
+            "path": "/service1/",
+            "target": "http://192.168.1.11:8081"
+        },
+        {
+            "path": "/service2/",
+            "target": "http://192.168.1.12:8082"
+        },
+        {
+            "path": "/service3/",
+            "target": "http://192.168.1.13:8083"
+        }
+    ]
+}
