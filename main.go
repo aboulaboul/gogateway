@@ -36,7 +36,7 @@ func proxyHandler(target string) http.HandlerFunc {
 			http.Error(rw, "Error connecting to the backend server", http.StatusBadGateway)
 		}
 
-		r.URL.Path = r.URL.Path[len(r.URL.Path[:len(r.URL.Path)-len(req.URL.Path)]):] // Adjust the path to match the target service
+		r.URL.Path = r.URL.Path[len(r.URL.Path[:len(r.URL.Path)-len(r.URL.Path)]):] // Adjust the path to match the target service
 		proxy.ServeHTTP(w, r)
 	}
 }
